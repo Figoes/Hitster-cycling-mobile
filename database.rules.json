@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "sessions": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || !newData.exists() || data.child('hostId').val() === auth.uid || newData.child('players').child(auth.uid).exists() || data.child('players').child(auth.uid).exists())",
+        ".validate": "newData.hasChildren(['status', 'hostId'])",
+        "status":     { ".validate": "newData.isString() && (newData.val() == 'lobby' || newData.val() == 'playing' || newData.val() == 'ended')" },
+        "hostId":     { ".validate": "newData.isString()" },
+        "createdAt":  { ".validate": "newData.isNumber()" },
+        "turnIndex":  { ".validate": "newData.isNumber()" },
+        "winnerId":   { ".validate": "newData.isString()" },
+        "turnOrder":  { ".validate": "newData.hasChildren()" },
+        "drawn":      { "$cardId": { ".validate": "newData.isString()" } },
+        "players": {
+          "$pid": {
+            ".validate": "newData.hasChild('name')",
+            "name":         { ".validate": "newData.isString() && newData.val().length <= 14" },
+            "joinedAt":     { ".validate": "newData.isNumber()" },
+            "score":        { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 50" },
+            "currentDraw":  { ".validate": "newData.isString()" },
+            "timeline":     { ".validate": "true" }
+          }
+        }
+      }
+    }
+  }
+}
