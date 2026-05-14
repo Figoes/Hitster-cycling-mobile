@@ -205,6 +205,19 @@ input[type="text"]:focus { border-color: var(--pink); }
 /* ── GAME ── */
 .game {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+.game > .scoreboard,
+.game > .timeline-wrap {
+  width: 100%;
+}
+.game .result {
+  width: 100%;
+  max-width: 480px;
 }
 .scoreboard {
   display: flex;
