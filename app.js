@@ -259,6 +259,38 @@ async function leaveSession() {
   leaveLocal();
 }
 
+async function endGame() {
+  if (!state.session || !state.code) return;
+  const players = state.session.players || {};
+  const ranked = Object.entries(players)
+    .sort(([, a], [, b]) =>
+      (countCorrect(b) - countCorrect(a)) ||
+      ((a.joinedAt || 0) - (b.joinedAt || 0))
+    );
+  const updates = { status: "ended" };
+  const winnerId = ranked[0]?.[0];
+  if (winnerId) updates.winnerId = winnerId;
+  try {
+    await update(sessionRef(state.code), updates);
+  } catch (e) {
+    console.error("[endGame] update failed:", e);
+    showError("Afsluiten mislukt: " + (e?.code || e?.message || "onbekende fout"));
+  }
+}
+
+async function closeSessionFromTopbar() {
+  if (!state.session) return;
+  if (state.session.status === "lobby") {
+    if (!confirm("Lobby verlaten?")) return;
+    await leaveSession();
+  } else if (state.session.status === "playing") {
+    if (!confirm("Spel afsluiten? Dit eindigt het spel voor iedereen.")) return;
+    await endGame();
+  } else {
+    leaveLocal();
+  }
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Start game: pick starter cards, randomize turn order
 // ───────────────────────────────────────────────────────────────────────────
@@ -398,6 +430,10 @@ function render() {
   if (state.code) $meta.textContent = `Code ${state.code}`;
   else $meta.textContent = "";
 
+  // Show topbar close button only when in a session
+  const $topClose = document.getElementById("btnTopClose");
+  if ($topClose) $topClose.hidden = !state.session;
+
   // Toggle landscape-hint class
   document.body.classList.toggle("in-game", state.session?.status === "playing");
 
@@ -493,7 +529,9 @@ function renderGame() {
   // My timeline (always rendered)
   const sorted = sortTimeline(me.timeline);
   const hasDraw = !!me.currentDraw;
-  const showSlots = myTurn && hasDraw && !state.cardOpen && !state.localResult;
+  // Slots are visible whenever the player has a card to place — also when
+  // the description is open. Only hide during the result toast.
+  const showSlots = myTurn && hasDraw && !state.localResult;
 
   const tlHtml = renderTimeline(sorted, showSlots);
 
@@ -522,7 +560,7 @@ function renderGame() {
           <div class="description">${escapeHtml(card.kort)}</div>
           <div class="description" style="color:var(--mute);font-size:0.85rem">${escapeHtml(card.lang)}</div>
         </div>
-        <div class="placement-hint">Sluit de kaart en plaats hem in jouw tijdlijn</div>
+        <div class="placement-hint">Plaats de kaart in jouw tijdlijn</div>
       `;
     } else {
       centerHtml = `
@@ -631,6 +669,9 @@ function bindEvents() {
     });
   });
 }
+
+// Bind topbar close button once — it lives outside #view so isn't rebound on render.
+document.getElementById("btnTopClose")?.addEventListener("click", closeSessionFromTopbar);
 
 // initial paint while waiting for auth
 render();
