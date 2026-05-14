@@ -208,12 +208,19 @@ input[type="text"]:focus { border-color: var(--pink); }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   width: 100%;
 }
 .game > .scoreboard,
-.game > .timeline-wrap {
+.game > .timeline-wrap,
+.game > .game-center {
   width: 100%;
+}
+.game-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 .game .result {
   width: 100%;
@@ -323,7 +330,7 @@ input[type="text"]:focus { border-color: var(--pink); }
   gap: 12px;
 }
 .face-down-card {
-  width: min(78vw, 320px);
+  height: min(50vh, 280px);
   aspect-ratio: 3 / 4;
   background: var(--card-bg);
   border: 2px solid var(--pink);
@@ -475,4 +482,63 @@ input[type="text"]:focus { border-color: var(--pink); }
 /* show rotate hint only on small portrait viewports while in-game */
 @media (orientation: portrait) and (max-width: 720px) {
   body.in-game .rotate-hint { display: flex; }
+}
+
+/* ── LANDSCAPE MOBILE: side-by-side card + timeline ── */
+@media (orientation: landscape) and (max-height: 500px) {
+  .topbar { padding: 4px 12px; }
+  .topbar img { height: 22px; width: 22px; }
+  .topbar .logo { font-size: 0.85rem; }
+
+  #view {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .game {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "scoreboard  scoreboard"
+      "turn        turn"
+      "center      timeline";
+    gap: 8px;
+    align-items: stretch;
+  }
+  .game > .scoreboard  { grid-area: scoreboard; }
+  .game > .turn-banner { grid-area: turn; }
+  .game > .game-center { grid-area: center; align-self: center; }
+  .game > .timeline-wrap { grid-area: timeline; height: 100%; }
+
+  .scoreboard .pill {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+  }
+  .turn-banner { padding: 2px 0; font-size: 0.85rem; }
+
+  .face-down-card {
+    height: min(55vh, 200px);
+  }
+  .face-down-card .tap-hint { font-size: 0.72rem; }
+
+  .face-up-card {
+    max-width: min(45vw, 360px);
+    padding: 10px 12px;
+    gap: 6px;
+  }
+  .face-up-card .description { font-size: 0.85rem; line-height: 1.4; }
+  .face-up-card .description + .description { font-size: 0.75rem !important; }
+
+  .placement-hint { font-size: 0.78rem; }
+
+  .timeline-wrap { padding: 8px 8px 6px; }
+  .timeline-wrap h3 { margin-bottom: 4px; font-size: 0.7rem; }
+  .timeline { min-height: 100px; gap: 4px; }
+  .tl-card  { width: 110px; padding: 8px; font-size: 0.72rem; }
+  .tl-card .year { font-size: 1.2rem; }
+  .tl-slot  { width: 26px; font-size: 1.2rem; }
+
+  .result { padding: 10px; font-size: 0.95rem; }
+  .result .year-big { font-size: 1.6rem; }
 }

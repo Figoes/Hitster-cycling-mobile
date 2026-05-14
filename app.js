@@ -543,7 +543,7 @@ function renderGame() {
     <div class="game">
       <div class="scoreboard">${scoreHtml}</div>
       ${turnHtml}
-      ${centerHtml}
+      <div class="game-center">${centerHtml}</div>
       <div class="timeline-wrap">
         <h3>${escapeHtml(me.name)}'s tijdlijn</h3>
         ${tlHtml}
