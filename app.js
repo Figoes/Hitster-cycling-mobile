@@ -41,6 +41,7 @@ const state = {
   localResult: null,        // { correct, year, rider } shown briefly after placing
   resultTimer: null,
   error: null,
+  drawing: false,           // debounce flag for auto-draw
 };
 
 const $view = document.getElementById("view");
@@ -350,6 +351,18 @@ async function startGame() {
 // ───────────────────────────────────────────────────────────────────────────
 // Draw: transactionally pick an undrawn card, assign to current player
 // ───────────────────────────────────────────────────────────────────────────
+function maybeAutoDraw() {
+  if (state.drawing) return;
+  if (!state.session || state.session.status !== "playing") return;
+  if (state.localResult) return;
+  const order = state.session.turnOrder || [];
+  if (order[state.session.turnIndex] !== state.me.id) return;
+  const me = state.session.players?.[state.me.id];
+  if (!me || me.currentDraw) return;
+  state.drawing = true;
+  drawCard().finally(() => { state.drawing = false; });
+}
+
 async function drawCard() {
   if (!state.session || state.session.status !== "playing") return;
   const myTurn = state.session.turnOrder[state.session.turnIndex] === state.me.id;
@@ -456,6 +469,10 @@ function render() {
 
   // Toggle landscape-hint class
   document.body.classList.toggle("in-game", state.session?.status === "playing");
+
+  // Auto-draw a card the moment it becomes my turn — no separate "Trek nieuwe
+  // kaart" step. The face-down card just appears, ready to be opened.
+  maybeAutoDraw();
 
   let html = "";
   if (!state.me.id) {
@@ -595,12 +612,12 @@ function renderGame() {
     turnCls = "waiting";
   }
 
-  // Decide left-column width based on view mode
-  const leftWidth = state.localResult
-    ? "1fr"  // reveal: left card takes more room
+  // Grid columns per view — always two tracks so the right column doesn't wrap.
+  const gridCols = state.localResult
+    ? "1fr 1.2fr"
     : (myTurn && hasDraw && state.cardOpen)
-    ? "1.1fr 1fr" /* hero card */
-    : "200px";
+    ? "1.1fr 1fr"
+    : "200px 1fr";
 
   // Build sub-views
   const sortedTl = sortTimeline(me.timeline);
@@ -650,7 +667,7 @@ function renderGame() {
             <div class="race">${escapeHtml(card.race)}</div>
           </div>
         </div>
-        <p class="blurb">${escapeHtml(card.kort)}</p>
+        <p class="blurb">${escapeHtml(card.lang)}</p>
         <div class="stats-row">
           <span class="uc display" style="font-size:9px;color:var(--hc-text-dim)">Moeilijkheid${renderDiffDots(card.diff)}</span>
           <span class="uc display glow-pink" style="font-size:9px">+1 PUNT</span>
@@ -664,31 +681,32 @@ function renderGame() {
       <div class="timeline-side">
         <div class="timeline-head">
           <div class="lbl">Jouw tijdlijn</div>
-          <div class="meta">${sortedTl.length} kaarten · kies een gleuf</div>
+          <div class="meta">Plaats je kaart in de juiste volgorde</div>
         </div>
         ${renderTimelineStrip(sortedTl, "preview-active", null)}
-        <div class="timeline-foot glow-pink">← Lees rustig · daarna kies je een gleuf</div>
+        <div class="timeline-foot glow-pink">← Lees rustig · plaats hem dan in de juiste volgorde</div>
       </div>
     `;
   } else {
     // ── GameBoard (face-down draw card on left, timeline on right) ──
-    const action = !hasDraw ? "draw" : "open";  // what tapping the card/btn does
-    const drawLabel = !hasDraw
-      ? "Trek nieuwe kaart"
-      : "👆 Tik om te lezen";
-    const labelTop = !hasDraw
-      ? (myTurn ? "Nieuwe kaart" : "Andermans beurt")
-      : "Nieuwe kaart";
+    // Auto-draw fires before render so myTurn && hasDraw is the common case.
+    // Tap the card OR the helper text to flip face-up.
+    const tappable = myTurn && hasDraw;
+    const helperLabel = !myTurn
+      ? `${escapeHtml(activeName)} is aan de beurt`
+      : hasDraw
+      ? "👆 Tik om te lezen"
+      : "Kaart wordt getrokken…";
 
     leftHtml = `
       <div class="draw-side">
-        <div class="label">${labelTop}</div>
-        <div class="draw-card" ${myTurn ? `data-action="${action}"` : ""}>
+        <div class="label">Nieuwe kaart</div>
+        <div class="draw-card" ${tappable ? `data-action="open"` : ""}>
           <div class="inner"></div>
         </div>
-        ${myTurn
-          ? `<button class="hc-btn hc-btn--primary" data-action="${action}" style="font-size:11px;padding:8px 14px">${drawLabel}</button>`
-          : `<div class="label" style="text-align:center">${escapeHtml(activeName)} ${hasDraw ? "denkt na…" : "is aan de beurt"}</div>`}
+        ${tappable
+          ? `<button class="hc-btn hc-btn--primary" data-action="open" style="font-size:11px;padding:8px 14px">${helperLabel}</button>`
+          : `<div class="label" style="text-align:center">${helperLabel}</div>`}
       </div>
     `;
     rightHtml = `
@@ -698,7 +716,7 @@ function renderGame() {
           <div class="meta">${sortedTl.length} kaarten</div>
         </div>
         ${renderTimelineStrip(sortedTl, showSlots ? "active" : "filled", null)}
-        ${showSlots ? `<div class="timeline-foot">↑ Of kies direct een gleuf</div>` : ``}
+        ${showSlots ? `<div class="timeline-foot">↑ Plaats je kaart in de juiste volgorde</div>` : ``}
       </div>
     `;
   }
@@ -709,7 +727,7 @@ function renderGame() {
         <div class="tabs">${tabsHtml}</div>
         <div class="turn-msg ${turnCls}">${turnMsg}</div>
       </div>
-      <div class="game-body" style="grid-template-columns: ${leftWidth};">
+      <div class="game-body" style="grid-template-columns: ${gridCols};">
         ${leftHtml}
         ${rightHtml}
       </div>

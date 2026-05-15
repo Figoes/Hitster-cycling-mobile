@@ -11,13 +11,13 @@ spel. Geen QR-codes meer — alles in-app.
    eigen tijdlijn. De startkaart telt niet voor de score.
 4. Wie aan de beurt is tikt op "Volgende kaart". De kaart verschijnt eerst
    dichtgeklapt (logo). Tik om de beschrijving te lezen, sluit hem weer.
-5. Plaats de kaart in een gleuf in jouw eigen tijdlijn.
+5. Plaats de kaart in de juiste volgorde in jouw eigen tijdlijn.
 6. **Auto-validatie**: het juiste jaar wordt automatisch gecheckt.
    Goed → kaart blijft staan met jaartal en rennernaam. Fout → kaart
    verdwijnt, geen punt.
 7. Eerste speler met **5 correcte kaarten** wint.
 
-**Tie-break gedeelde jaren**: een gleuf is correct als
+**Tie-break gedeelde jaren**: een positie is correct als
 `vorig jaar ≤ kaart-jaar ≤ volgend jaar`. Wanneer er al een kaart met
 hetzelfde jaar in de tijdlijn staat, zijn meerdere gleuven correct — beide
 zijden van die kaart tellen.
