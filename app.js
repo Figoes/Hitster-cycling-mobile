@@ -645,12 +645,13 @@ function renderGame() {
     turnCls = "waiting";
   }
 
-  // Grid columns per view — always two tracks so the right column doesn't wrap.
-  const gridCols = state.localResult
-    ? "1fr 1.2fr"
+  // View mode drives the grid via a class — keeps inline styles out so the
+  // portrait media query can override the layout cleanly.
+  const viewMode = state.localResult
+    ? "reveal"
     : (myTurn && hasDraw && state.cardOpen)
-    ? "1.1fr 1fr"
-    : "200px 1fr";
+    ? "detail"
+    : "board";
 
   // Build sub-views
   const sortedTl = sortTimeline(me.timeline);
@@ -760,7 +761,7 @@ function renderGame() {
         <div class="tabs">${tabsHtml}</div>
         <div class="turn-msg ${turnCls}">${turnMsg}</div>
       </div>
-      <div class="game-body" style="grid-template-columns: ${gridCols};">
+      <div class="game-body game-body--${viewMode}">
         ${leftHtml}
         ${rightHtml}
       </div>
