@@ -87,13 +87,33 @@ function escapeHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-function badgeClass(cat) {
-  const k = cat.toLowerCase().replace(/\s+/g, "-").replace(/ë/g, "e");
-  return `badge ${k}`;
+function chipClass(cat) {
+  const k = cat.toLowerCase();
+  if (k.startsWith("memorabel")) return "hc-chip hc-chip--memo";
+  if (k.startsWith("klassiek")) return "hc-chip hc-chip--classic";
+  if (k.startsWith("wereldkampioenschap")) return "hc-chip hc-chip--epic";
+  return "hc-chip"; // grote ronde — neutral
+}
+
+function chipIcon(cat) {
+  const k = cat.toLowerCase();
+  if (k.startsWith("memorabel")) return "⚡";
+  if (k.startsWith("klassiek")) return "◆";
+  if (k.startsWith("wereldkampioenschap")) return "🏆";
+  return "🚴";
 }
 
 function countCorrect(player) {
   return (player.timeline || []).filter((c) => c.correct).length;
+}
+
+const ACCENT_CYCLE = ["cyan", "yellow", "pink", "orange"];
+function accentForIndex(i) { return ACCENT_CYCLE[i % ACCENT_CYCLE.length]; }
+function accentForPlayerIndex(i) { return ACCENT_CYCLE[i % ACCENT_CYCLE.length]; }
+
+function shortYearTag(year) {
+  if (year >= 2000) return "#" + String(year - 2000).padStart(2, "0");
+  return "#" + String(year).slice(-2);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -458,182 +478,330 @@ function render() {
   bindEvents();
 }
 
+// ── HOME ─────────────────────────────────────────────────────────────────
 function renderHome() {
   const name = escapeHtml(state.me.name);
   return `
     <div class="home">
-      <h1><span class="h">HITSTER</span> <span class="c">CYCLING</span></h1>
-      <div class="sub">Speel met 2–6 spelers. Iedereen op een eigen telefoon, in landschapsmodus.</div>
-      <input type="text" id="nameInput" placeholder="Je naam" value="${name}" maxlength="14" />
-      <div class="actions">
-        <button class="btn btn-primary" id="btnCreate">Nieuw spel starten</button>
-        <div class="divider">— OF —</div>
-        <input type="text" id="codeInput" placeholder="CODE" class="code-input" maxlength="${CODE_LENGTH}" autocapitalize="characters" />
-        <button class="btn btn-cyan" id="btnJoin">Meedoen met code</button>
+      <div class="left">
+        <div class="logo-tile"></div>
+        <div class="label">Multiplayer · 2–6 spelers</div>
+        <div class="title"><span class="h">HITSTER</span> <span class="c">CYCLING</span></div>
+        <div class="sub">Iedereen op een eigen telefoon. Speel in landschapsmodus rondom de tafel.</div>
+      </div>
+      <div class="hc-card right">
+        <div class="form-block">
+          <div class="field-label">Je naam</div>
+          <input type="text" id="nameInput" placeholder="Bijv. Pietje" value="${name}" maxlength="14" />
+        </div>
+        <button class="hc-btn hc-btn--primary" id="btnCreate">Nieuw spel starten</button>
+        <div class="or">— OF —</div>
+        <div class="form-block">
+          <div class="field-label">Spelcode</div>
+          <input type="text" id="codeInput" placeholder="ABCD" class="code-input" maxlength="${CODE_LENGTH}" autocapitalize="characters" />
+        </div>
+        <button class="hc-btn hc-btn--outline-cyan" id="btnJoin">Meedoen met code</button>
       </div>
     </div>
   `;
 }
 
+// ── LOBBY ────────────────────────────────────────────────────────────────
 function renderLobby() {
   const sess = state.session;
   const pids = Object.keys(sess.players || {});
   const isHost = sess.hostId === state.me.id;
   const canStart = pids.length >= MIN_PLAYERS;
 
-  const playersHtml = pids.map((pid) => {
+  const playersHtml = pids.map((pid, i) => {
     const p = sess.players[pid];
     const isMe = pid === state.me.id;
-    const crown = pid === sess.hostId ? `<span class="crown">★ host</span>` : "";
-    return `<li class="${isMe ? "me" : ""}">${escapeHtml(p.name)} ${crown}</li>`;
+    const isPlayerHost = pid === sess.hostId;
+    const accent = accentForPlayerIndex(i);
+    return `
+      <div class="player-row">
+        <div class="player-avatar" style="background:var(--hc-${accent})">${escapeHtml((p.name || "?")[0].toUpperCase())}</div>
+        <div class="player-info">
+          <div class="name ${isMe ? "is-me" : isPlayerHost ? "is-host" : ""}">
+            ${escapeHtml(p.name)}${isMe ? " (jij)" : ""}
+          </div>
+          <div class="sub">Doel: ${SCORE_TO_WIN} kaarten</div>
+        </div>
+        <div class="status ${isPlayerHost ? "host" : ""}">${isPlayerHost ? "★ HOST" : "✓ READY"}</div>
+      </div>
+    `;
   }).join("");
+
+  const startBtn = isHost
+    ? `<button class="hc-btn hc-btn--primary" id="btnStart" ${canStart ? "" : "disabled"}>Start spel</button>`
+    : "";
+  const leaveBtn = `<button class="hc-btn hc-btn--outline-cyan" id="btnLeave">Verlaat lobby</button>`;
+  const hint = !canStart && isHost
+    ? `<div class="hint">Wacht op minstens ${MIN_PLAYERS} spelers…</div>`
+    : !isHost
+    ? `<div class="hint">Wacht tot de host het spel start…</div>`
+    : "";
 
   return `
     <div class="lobby">
-      <div class="code-box">
-        <div class="label">Spelcode</div>
-        <div class="code">${sess.hostId ? state.code : ""}</div>
-        <div class="hint">Deel deze code met je medespelers</div>
+      <div class="lobby-left">
+        <div class="logo-tile"></div>
+        <div class="waiting">Wachten op spelers · ${pids.length}/${MAX_PLAYERS}</div>
+        <div class="kamercode">Kamercode</div>
+        <div class="roomcode">${escapeHtml(state.code || "")}</div>
+        <div class="actions">${startBtn}${leaveBtn}</div>
+        ${hint}
       </div>
-      <h2>Spelers (${pids.length}/${MAX_PLAYERS})</h2>
-      <ul class="player-list">${playersHtml}</ul>
-      ${isHost
-        ? `<button class="btn btn-primary" id="btnStart" ${canStart ? "" : "disabled"}>Start spel</button>
-           ${canStart ? "" : `<div class="sub" style="text-align:center;color:var(--mute)">Wacht op minstens ${MIN_PLAYERS} spelers…</div>`}`
-        : `<div class="sub" style="text-align:center;color:var(--mute)">Wacht tot de host het spel start…</div>`
-      }
-      <button class="btn btn-ghost" id="btnLeave">Verlaat lobby</button>
+      <div class="hc-card lobby-right">
+        <div class="section-label">Spelers</div>
+        ${playersHtml}
+      </div>
     </div>
   `;
 }
 
+// ── GAME (turn states) ───────────────────────────────────────────────────
 function renderGame() {
   const sess = state.session;
   const order = sess.turnOrder || [];
   const activeId = order[sess.turnIndex];
   const myTurn = activeId === state.me.id;
-  const me = sess.players[state.me.id];
+  const me = sess.players[state.me.id] || {};
   const activeName = sess.players[activeId]?.name || "";
 
-  // Scoreboard
-  const scoreHtml = order.map((pid) => {
+  // Header — player tabs + turn status
+  const tabsHtml = order.map((pid) => {
     const p = sess.players[pid];
+    if (!p) return "";
     const isActive = pid === activeId;
-    return `<div class="pill ${isActive ? "active" : ""}">${escapeHtml(p.name)}<span class="score">${countCorrect(p)}/${SCORE_TO_WIN}</span></div>`;
+    const isMe = pid === state.me.id;
+    const cls = isMe ? "is-me" : isActive ? "is-active" : "";
+    return `<div class="hc-playertab ${cls}"><span>${escapeHtml(p.name)}</span><span class="score">${countCorrect(p)}/${SCORE_TO_WIN}</span></div>`;
   }).join("");
 
-  const turnHtml = myTurn
-    ? `<div class="turn-banner">Jij bent aan de beurt</div>`
-    : `<div class="turn-banner waiting">${escapeHtml(activeName)} is aan de beurt</div>`;
-
-  // My timeline (always rendered)
-  const sorted = sortTimeline(me.timeline);
   const hasDraw = !!me.currentDraw;
-  // Slots are visible whenever the player has a card to place — also when
-  // the description is open. Only hide during the result toast.
+  let turnMsg, turnCls;
+  if (state.localResult) {
+    turnMsg = state.localResult.correct ? "Correct! →" : "Helaas, fout →";
+    turnCls = state.localResult.correct ? "mine" : "placing";
+  } else if (myTurn && hasDraw && state.cardOpen) {
+    turnMsg = "Plaats de kaart →";
+    turnCls = "placing";
+  } else if (myTurn) {
+    turnMsg = "Jij bent aan de beurt →";
+    turnCls = "mine";
+  } else {
+    turnMsg = `${activeName} is aan de beurt`;
+    turnCls = "waiting";
+  }
+
+  // Decide left-column width based on view mode
+  const leftWidth = state.localResult
+    ? "1fr"  // reveal: left card takes more room
+    : (myTurn && hasDraw && state.cardOpen)
+    ? "1.1fr 1fr" /* hero card */
+    : "200px";
+
+  // Build sub-views
+  const sortedTl = sortTimeline(me.timeline);
   const showSlots = myTurn && hasDraw && !state.localResult;
 
-  const tlHtml = renderTimeline(sorted, showSlots);
+  let leftHtml, rightHtml;
 
-  // Center area: draw button, face-down/face-up card, result toast
-  let centerHtml = "";
   if (state.localResult) {
+    // ── RevealYear ──
     const r = state.localResult;
-    centerHtml = `
-      <div class="result ${r.correct ? "ok" : "bad"}">
-        ${r.correct ? "Correct!" : "Helaas, fout"}
-        <span class="year-big">${r.year}</span>
-        <span class="rider">${escapeHtml(r.rider)}</span>
+    const card = MOMENTEN[r.cardId] || {};
+    const sideLabel = `${escapeHtml(me.name || "")} · ${countCorrect(me)} / ${SCORE_TO_WIN} kaarten`;
+    leftHtml = `
+      <div class="hc-card ${r.correct ? "hc-card--yellow" : "hc-card--pink"} reveal-card ${r.correct ? "" : "bad"}">
+        <span class="hc-chip ${chipClass(card.cat).split(" ").slice(1).join(" ")}" style="align-self:flex-start">${chipIcon(card.cat)} ${escapeHtml(card.cat || "")}</span>
+        <div class="center">
+          <div class="label-was">${r.correct ? "Het jaar was" : "Helaas — het was"}</div>
+          <div class="year-big">${r.year}</div>
+          <div class="rider-name">${escapeHtml(r.rider)}</div>
+          <div class="nat-race">${escapeHtml(card.nat || "")} · ${escapeHtml(card.race || "")}</div>
+        </div>
+        <div class="footer">
+          <span class="hc-chip ${r.correct ? "hc-chip--green" : "hc-chip--red"}">${r.correct ? "✓ Correct geplaatst" : "✗ Niet correct"}</span>
+        </div>
       </div>
     `;
-  } else if (myTurn && !hasDraw) {
-    centerHtml = `<button class="btn btn-primary" id="btnDraw">🎴 Volgende kaart</button>`;
-  } else if (myTurn && hasDraw) {
+    rightHtml = `
+      <div class="reveal-side">
+        <div class="label">${sideLabel}</div>
+        ${renderTimelineStrip(sortedTl, "filled", -1, r.correct ? r.cardId : null)}
+      </div>
+    `;
+  } else if (myTurn && hasDraw && state.cardOpen) {
+    // ── CardDetail (hero card on left, timeline preview on right) ──
     const card = MOMENTEN[me.currentDraw];
-    if (state.cardOpen) {
-      centerHtml = `
-        <div class="face-up-card">
-          <div class="top">
-            <span class="${badgeClass(card.cat)}">${escapeHtml(card.cat)}</span>
-            <button class="btn btn-ghost" id="btnClose" style="padding:6px 12px;font-size:0.85rem">Sluiten</button>
-          </div>
-          <div class="description">${escapeHtml(card.kort)}</div>
-          <div class="description" style="color:var(--mute);font-size:0.85rem">${escapeHtml(card.lang)}</div>
+    leftHtml = `
+      <div class="hc-card hc-card--pink hero-card">
+        <div class="row-top">
+          <span class="${chipClass(card.cat)}">${chipIcon(card.cat)} ${escapeHtml(card.cat)}</span>
+          <span class="card-id">${escapeHtml(me.currentDraw)}</span>
         </div>
-        <div class="placement-hint">Plaats de kaart in jouw tijdlijn</div>
-      `;
-    } else {
-      centerHtml = `
-        <div class="draw-area">
-          <div class="face-down-card" id="cardFaceDown">
-            <img src="logo.png" alt="">
-            <div class="tap-hint">👆 Tik om te lezen</div>
+        <div class="hero-bib">
+          <div class="year-mask">????</div>
+          <div class="meta">
+            <div class="rider">${escapeHtml(card.renner)}</div>
+            <div class="nat">${escapeHtml(card.nat)}</div>
+            <div class="race">${escapeHtml(card.race)}</div>
           </div>
-          <div class="placement-hint">Of kies direct een gleuf in jouw tijdlijn</div>
         </div>
-      `;
-    }
+        <p class="blurb">${escapeHtml(card.kort)}</p>
+        <div class="stats-row">
+          <span class="uc display" style="font-size:9px;color:var(--hc-text-dim)">Moeilijkheid${renderDiffDots(card.diff)}</span>
+          <span class="uc display glow-pink" style="font-size:9px">+1 PUNT</span>
+        </div>
+        <div class="action-row">
+          <button class="hc-btn hc-btn--outline-pink" id="btnClose">← Sluit kaart</button>
+        </div>
+      </div>
+    `;
+    rightHtml = `
+      <div class="timeline-side">
+        <div class="timeline-head">
+          <div class="lbl">Jouw tijdlijn</div>
+          <div class="meta">${sortedTl.length} kaarten · kies een gleuf</div>
+        </div>
+        ${renderTimelineStrip(sortedTl, "preview-active", null)}
+        <div class="timeline-foot glow-pink">← Lees rustig · daarna kies je een gleuf</div>
+      </div>
+    `;
   } else {
-    centerHtml = `<div class="turn-banner waiting">Wacht op ${escapeHtml(activeName)}…</div>`;
+    // ── GameBoard (face-down draw card on left, timeline on right) ──
+    const action = !hasDraw ? "draw" : "open";  // what tapping the card/btn does
+    const drawLabel = !hasDraw
+      ? "Trek nieuwe kaart"
+      : "👆 Tik om te lezen";
+    const labelTop = !hasDraw
+      ? (myTurn ? "Nieuwe kaart" : "Andermans beurt")
+      : "Nieuwe kaart";
+
+    leftHtml = `
+      <div class="draw-side">
+        <div class="label">${labelTop}</div>
+        <div class="draw-card" ${myTurn ? `data-action="${action}"` : ""}>
+          <div class="inner"></div>
+        </div>
+        ${myTurn
+          ? `<button class="hc-btn hc-btn--primary" data-action="${action}" style="font-size:11px;padding:8px 14px">${drawLabel}</button>`
+          : `<div class="label" style="text-align:center">${escapeHtml(activeName)} ${hasDraw ? "denkt na…" : "is aan de beurt"}</div>`}
+      </div>
+    `;
+    rightHtml = `
+      <div class="timeline-side">
+        <div class="timeline-head">
+          <div class="lbl">${escapeHtml(myTurn ? "Jouw tijdlijn" : me.name + "'s tijdlijn")}</div>
+          <div class="meta">${sortedTl.length} kaarten</div>
+        </div>
+        ${renderTimelineStrip(sortedTl, showSlots ? "active" : "filled", null)}
+        ${showSlots ? `<div class="timeline-foot">↑ Of kies direct een gleuf</div>` : ``}
+      </div>
+    `;
   }
 
   return `
     <div class="game">
-      <div class="scoreboard">${scoreHtml}</div>
-      ${turnHtml}
-      <div class="game-center">${centerHtml}</div>
-      <div class="timeline-wrap">
-        <h3>${escapeHtml(me.name)}'s tijdlijn</h3>
-        ${tlHtml}
+      <div class="game-header">
+        <div class="tabs">${tabsHtml}</div>
+        <div class="turn-msg ${turnCls}">${turnMsg}</div>
+      </div>
+      <div class="game-body" style="grid-template-columns: ${leftWidth};">
+        ${leftHtml}
+        ${rightHtml}
       </div>
     </div>
   `;
 }
 
-function renderTimeline(sorted, showSlots) {
-  // Render N cards interleaved with N+1 slots (only if showSlots).
+// Difficulty dots — returns an inline span
+function renderDiffDots(diff) {
+  const total = 3;
+  const filled = Math.max(0, Math.min(total, diff || 0));
+  let dots = `<span class="diff-dots">`;
+  for (let i = 0; i < total; i++) {
+    dots += `<span class="hc-dot ${i < filled ? "hc-dot--on" : "hc-dot--off"}"></span>`;
+  }
+  dots += `</span>`;
+  return dots;
+}
+
+// Timeline strip with cards interleaved with slots.
+// mode:
+//   "filled"      — no slots, just cards
+//   "active"      — slots between every pair, all tappable
+//   "preview-active" — slots tappable but rendered dim (player is reading the card)
+function renderTimelineStrip(sorted, mode, _activeIdx, highlightCardId = null) {
+  const showSlots = mode !== "filled";
+  const dim = mode === "preview-active";
   const parts = [];
   for (let i = 0; i <= sorted.length; i++) {
     if (showSlots) {
-      parts.push(`<div class="tl-slot" data-slot="${i}">＋</div>`);
+      parts.push(`<div class="tl-slot ${dim ? "dim" : ""}" data-slot="${i}"></div>`);
     }
     if (i < sorted.length) {
       const entry = sorted[i];
       const card = MOMENTEN[entry.cardId];
-      const isAnchor = !entry.correct; // anchor is the only non-correct entry on the timeline
+      if (!card) continue;
+      const isAnchor = !entry.correct;
+      const isHighlight = highlightCardId && entry.cardId === highlightCardId;
+      const accent = isHighlight ? "yellow" : isAnchor ? "cyan" : accentForIndex(i);
+      const tag = isAnchor ? "START" : shortYearTag(entry.year);
       parts.push(`
-        <div class="tl-card ${entry.correct ? "correct" : "anchor"}">
+        <div class="tl-card accent-${accent}" data-card="${escapeHtml(entry.cardId)}">
           <div class="year">${entry.year}</div>
           <div class="rider">${escapeHtml(card.renner)}</div>
           <div class="race">${escapeHtml(card.race)}</div>
-          ${isAnchor ? `<div class="anchor-tag">Start</div>` : ""}
+          <div class="footer">${tag}</div>
         </div>
       `);
     }
   }
-  return `<div class="timeline">${parts.join("")}</div>`;
+  return `<div class="tl-strip">${parts.join("")}</div>`;
 }
 
+// ── END SCREEN ───────────────────────────────────────────────────────────
 function renderEnd() {
   const sess = state.session;
-  const winner = sess.players[sess.winnerId];
-  const order = sess.turnOrder || Object.keys(sess.players);
-  const ranking = order.map((pid) => sess.players[pid])
-    .sort((a, b) => countCorrect(b) - countCorrect(a));
+  const order = sess.turnOrder || Object.keys(sess.players || {});
+  const ranking = order
+    .map((pid) => ({ pid, p: sess.players[pid] }))
+    .filter((x) => x.p)
+    .sort((a, b) => countCorrect(b.p) - countCorrect(a.p));
 
-  const listHtml = ranking.map((p, i) => `
-    <li class="${i === 0 ? "first" : ""}">
-      <span>${i === 0 ? "🏆 " : ""}${escapeHtml(p.name)}</span>
-      <span>${countCorrect(p)} / ${SCORE_TO_WIN}</span>
-    </li>
-  `).join("");
+  const winner = ranking[0]?.p;
+  const winnerName = (winner?.name || "").toUpperCase();
 
+  const RANK_COLORS = ["var(--hc-yellow)", "var(--hc-cyan)", "var(--hc-pink)", "var(--hc-text-dim)", "var(--hc-text-dim)", "var(--hc-text-dim)"];
+  const MEDALS = ["🏆", "🥈", "🥉", "•", "•", "•"];
+
+  const rowsHtml = ranking.map(({ p }, i) => {
+    const color = RANK_COLORS[i] || "var(--hc-text-dim)";
+    return `
+      <div class="lb-row rank-${i + 1}" style="--rank-color:${color}">
+        <span class="lb-rank">${i + 1}</span>
+        <span class="lb-medal">${MEDALS[i] || "•"}</span>
+        <span class="lb-name">${escapeHtml(p.name)}</span>
+        <span class="lb-score">${countCorrect(p)}/${SCORE_TO_WIN}</span>
+      </div>
+    `;
+  }).join("");
+
+  const winnerScore = winner ? countCorrect(winner) : 0;
   return `
     <div class="end">
-      <h1>🎉 Winnaar!</h1>
-      <div class="winner">${escapeHtml(winner?.name || "")}</div>
-      <ul class="final-list">${listHtml}</ul>
-      <button class="btn btn-primary" id="btnLeave">Terug naar start</button>
+      <div class="end-left">
+        <div class="lbl">🏆 Eindklassement</div>
+        <div class="winner-text">${escapeHtml(winnerName)}<br/>WINT!</div>
+        <div class="stats">${winnerScore} kaarten correct geplaatst</div>
+        <div class="actions">
+          <button class="hc-btn hc-btn--primary" id="btnLeave">Opnieuw spelen</button>
+        </div>
+      </div>
+      <div class="hc-card end-leaderboard">${rowsHtml}</div>
     </div>
   `;
 }
@@ -645,21 +813,29 @@ function bindEvents() {
   const $ = (sel) => $view.querySelector(sel);
 
   $("#btnCreate")?.addEventListener("click", () => {
-    const name = $("#nameInput").value;
+    const name = $("#nameInput")?.value || "";
     createSession(name);
   });
   $("#btnJoin")?.addEventListener("click", () => {
-    const name = $("#nameInput").value;
-    const code = $("#codeInput").value;
+    const name = $("#nameInput")?.value || "";
+    const code = $("#codeInput")?.value || "";
     joinSession(code, name);
   });
   $("#btnStart")?.addEventListener("click", startGame);
-  $("#btnLeave")?.addEventListener("click", leaveSession);
-  $("#btnDraw")?.addEventListener("click", drawCard);
-  $("#btnClose")?.addEventListener("click", () => { state.cardOpen = false; render(); });
 
-  // Face-down card → reveal again
-  $("#cardFaceDown")?.addEventListener("click", () => { state.cardOpen = true; render(); });
+  // The end screen "Opnieuw spelen" and lobby "Verlaat lobby" share btnLeave
+  $("#btnLeave")?.addEventListener("click", leaveSession);
+
+  // Game-board face-down card / draw button (data-action="draw" or "open")
+  $view.querySelectorAll('[data-action="draw"]').forEach((el) => {
+    el.addEventListener("click", drawCard);
+  });
+  $view.querySelectorAll('[data-action="open"]').forEach((el) => {
+    el.addEventListener("click", () => { state.cardOpen = true; render(); });
+  });
+
+  // CardDetail close button — keep card open or close (toggle)
+  $("#btnClose")?.addEventListener("click", () => { state.cardOpen = false; render(); });
 
   // Timeline slots
   $view.querySelectorAll(".tl-slot").forEach((el) => {
