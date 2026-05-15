@@ -769,10 +769,13 @@ input.code-input {
   .game-header .tabs { width: 100%; }
   .game-header .turn-msg { width: 100%; text-align: center; }
 
-  /* Center-align stacked content */
-  .draw-side, .timeline-side, .reveal-side, .lobby-left, .home .left, .end-left {
+  /* Center-align stacked content (NOT timeline-side — that needs to stretch
+     so the .tl-strip child can overflow-x scroll). */
+  .draw-side, .reveal-side, .lobby-left, .home .left, .end-left {
     align-items: center; text-align: center;
   }
+  .timeline-side { text-align: center; align-items: stretch; overflow: visible; }
+  .timeline-side .tl-strip { width: 100%; }
   .lobby-left .actions, .home .left, .end-left .actions { align-self: center; }
 
   /* Bigger draw card in portrait — vertical room is plenty */
