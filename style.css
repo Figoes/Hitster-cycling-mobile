@@ -77,7 +77,7 @@ body::after {
 /* ── APPBAR (replaces .topbar) ─────────────────────────────────────────── */
 .hc-appbar {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 14px;
+  padding: 8px max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
   border-bottom: 1px solid var(--hc-divider);
   position: relative;
   flex: 0 0 auto;
@@ -252,7 +252,7 @@ body::after {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   gap: 18px;
-  padding: 14px 18px;
+  padding: 14px max(18px, env(safe-area-inset-right)) 14px max(18px, env(safe-area-inset-left));
   align-items: center;
 }
 .home .left {
@@ -310,7 +310,7 @@ input.code-input {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   gap: 18px;
-  padding: 14px 18px;
+  padding: 14px max(18px, env(safe-area-inset-right)) 14px max(18px, env(safe-area-inset-left));
   align-items: center;
   overflow: hidden;
 }
@@ -337,6 +337,39 @@ input.code-input {
 }
 .lobby-left .actions { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .lobby-left .hint    { font-size: 10px; color: var(--hc-text-faint); margin-top: 4px; }
+
+.score-config { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.score-config .lbl {
+  font-family: var(--hc-display); font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--hc-text-dim);
+}
+.stepper {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 6px;
+  border: 1px solid var(--hc-pink);
+  border-radius: var(--hc-r-pill);
+  box-shadow: var(--hc-glow-pink-sm), inset 0 0 12px rgba(255,30,142,0.08);
+  align-self: flex-start;
+}
+.stepper.read-only { border-color: var(--hc-divider-strong); box-shadow: none; }
+.stepper button {
+  width: 30px; height: 30px;
+  border: none; background: transparent;
+  font-family: var(--hc-display); font-size: 18px; font-weight: 900;
+  color: var(--hc-pink); text-shadow: var(--hc-glow-pink-sm);
+  cursor: pointer; border-radius: 50%;
+  display: grid; place-items: center;
+  transition: background 0.12s;
+}
+.stepper button:hover  { background: rgba(255,30,142,0.10); }
+.stepper button:active { background: rgba(255,30,142,0.20); transform: scale(0.94); }
+.stepper button[disabled] { opacity: 0.25; pointer-events: none; }
+.stepper .value {
+  min-width: 32px; text-align: center;
+  font-family: var(--hc-display); font-size: 22px; font-weight: 900;
+  color: var(--hc-cyan); text-shadow: var(--hc-glow-cyan-sm);
+  padding: 0 4px;
+}
 
 .lobby-right { padding: 14px; display: flex; flex-direction: column; gap: 6px; max-height: 100%; overflow-y: auto; }
 .lobby-right .section-label { font-family: var(--hc-display); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--hc-text-dim); margin-bottom: 4px; }
@@ -378,7 +411,7 @@ input.code-input {
 
 .game-header {
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  padding: 8px 18px 4px;
+  padding: 8px max(18px, env(safe-area-inset-right)) 4px max(18px, env(safe-area-inset-left));
   flex: 0 0 auto;
 }
 .game-header .tabs {
@@ -399,7 +432,7 @@ input.code-input {
   display: grid;
   grid-template-columns: var(--game-left, 200px) 1fr;
   gap: 14px;
-  padding: 4px 18px 14px;
+  padding: 4px max(18px, env(safe-area-inset-right)) 14px max(18px, env(safe-area-inset-left));
   overflow: hidden;
   min-height: 0;
 }
@@ -643,7 +676,7 @@ input.code-input {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   gap: 18px;
-  padding: 12px 18px;
+  padding: 12px max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left));
   overflow: hidden;
   align-items: center;
 }
@@ -727,13 +760,13 @@ input.code-input {
 /* ── RESPONSIVE TWEAKS ─────────────────────────────────────────────────── */
 /* On very small landscape (typical phones ≤ 430px tall), trim everything */
 @media (orientation: landscape) and (max-height: 430px) {
-  .hc-appbar { padding: 4px 12px; }
+  .hc-appbar { padding: 4px max(12px, env(safe-area-inset-right)) 4px max(12px, env(safe-area-inset-left)); }
   .hc-appbar img { width: 22px; height: 22px; }
   .hc-appbar .wordmark { font-size: 12px; }
 
-  .lobby, .home, .end { padding: 8px 12px; gap: 12px; }
-  .game-body { padding: 4px 12px 8px; gap: 10px; }
-  .game-header { padding: 4px 12px 2px; }
+  .lobby, .home, .end { padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)); gap: 12px; }
+  .game-body { padding: 4px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)); gap: 10px; }
+  .game-header { padding: 4px max(12px, env(safe-area-inset-right)) 2px max(12px, env(safe-area-inset-left)); }
 
   .lobby-left .logo-tile, .home .logo-tile { width: 64px; height: 64px; border-radius: 12px; }
   .lobby-left .roomcode { font-size: 30px; letter-spacing: 5px; }

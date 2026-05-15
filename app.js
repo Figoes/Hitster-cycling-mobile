@@ -15,7 +15,12 @@ import { firebaseConfig } from "./firebase-config.js";
 // ───────────────────────────────────────────────────────────────────────────
 // Constants
 // ───────────────────────────────────────────────────────────────────────────
-const SCORE_TO_WIN = 5;
+const SCORE_DEFAULT = 5;
+const SCORE_MIN = 1;
+const SCORE_MAX = 11;
+function scoreTarget() {
+  return state.session?.scoreToWin || SCORE_DEFAULT;
+}
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 6;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
@@ -169,6 +174,7 @@ async function createSession(name) {
       hostId: state.me.id,
       createdAt: now,
       turnIndex: 0,
+      scoreToWin: SCORE_DEFAULT,
       players: {
         [state.me.id]: { name: name.trim(), joinedAt: now, score: 0 }
       }
@@ -278,6 +284,20 @@ async function leaveSession() {
     }
   }
   leaveLocal();
+}
+
+async function setScoreToWin(value) {
+  if (!state.session || !state.code) return;
+  if (state.session.hostId !== state.me.id) return;
+  if (state.session.status !== "lobby") return;
+  const clamped = Math.max(SCORE_MIN, Math.min(SCORE_MAX, value));
+  if (clamped === scoreTarget()) return;
+  try {
+    await update(sessionRef(state.code), { scoreToWin: clamped });
+  } catch (e) {
+    console.error("[setScoreToWin] update failed:", e);
+    showError("Aanpassen mislukt: " + (e?.code || e?.message || "onbekende fout"));
+  }
 }
 
 async function endGame() {
@@ -424,7 +444,7 @@ async function placeCard(slotIndex) {
   // Determine end-of-game
   let nextStatus = state.session.status;
   let winnerId = state.session.winnerId || null;
-  if (correct && newScore >= SCORE_TO_WIN) {
+  if (correct && newScore >= scoreTarget()) {
     nextStatus = "ended";
     winnerId = state.me.id;
   }
@@ -542,7 +562,7 @@ function renderLobby() {
           <div class="name ${isMe ? "is-me" : isPlayerHost ? "is-host" : ""}">
             ${escapeHtml(p.name)}${isMe ? " (jij)" : ""}
           </div>
-          <div class="sub">Doel: ${SCORE_TO_WIN} kaarten</div>
+          <div class="sub">Doel: ${scoreTarget()} kaarten</div>
         </div>
         <div class="status ${isPlayerHost ? "host" : ""}">${isPlayerHost ? "★ HOST" : "✓ READY"}</div>
       </div>
@@ -559,6 +579,15 @@ function renderLobby() {
     ? `<div class="hint">Wacht tot de host het spel start…</div>`
     : "";
 
+  const target = scoreTarget();
+  const stepperHtml = isHost
+    ? `<div class="stepper" role="group" aria-label="Aantal kaarten om te winnen">
+         <button id="stepDown" ${target <= SCORE_MIN ? "disabled" : ""} aria-label="Minder">−</button>
+         <div class="value">${target}</div>
+         <button id="stepUp" ${target >= SCORE_MAX ? "disabled" : ""} aria-label="Meer">+</button>
+       </div>`
+    : `<div class="stepper read-only"><div class="value">${target}</div></div>`;
+
   return `
     <div class="lobby">
       <div class="lobby-left">
@@ -566,6 +595,10 @@ function renderLobby() {
         <div class="waiting">Wachten op spelers · ${pids.length}/${MAX_PLAYERS}</div>
         <div class="kamercode">Kamercode</div>
         <div class="roomcode">${escapeHtml(state.code || "")}</div>
+        <div class="score-config">
+          <div class="lbl">Aantal kaarten om te winnen</div>
+          ${stepperHtml}
+        </div>
         <div class="actions">${startBtn}${leaveBtn}</div>
         ${hint}
       </div>
@@ -593,7 +626,7 @@ function renderGame() {
     const isActive = pid === activeId;
     const isMe = pid === state.me.id;
     const cls = isMe ? "is-me" : isActive ? "is-active" : "";
-    return `<div class="hc-playertab ${cls}"><span>${escapeHtml(p.name)}</span><span class="score">${countCorrect(p)}/${SCORE_TO_WIN}</span></div>`;
+    return `<div class="hc-playertab ${cls}"><span>${escapeHtml(p.name)}</span><span class="score">${countCorrect(p)}/${scoreTarget()}</span></div>`;
   }).join("");
 
   const hasDraw = !!me.currentDraw;
@@ -629,7 +662,7 @@ function renderGame() {
     // ── RevealYear ──
     const r = state.localResult;
     const card = MOMENTEN[r.cardId] || {};
-    const sideLabel = `${escapeHtml(me.name || "")} · ${countCorrect(me)} / ${SCORE_TO_WIN} kaarten`;
+    const sideLabel = `${escapeHtml(me.name || "")} · ${countCorrect(me)} / ${scoreTarget()} kaarten`;
     leftHtml = `
       <div class="hc-card ${r.correct ? "hc-card--yellow" : "hc-card--pink"} reveal-card ${r.correct ? "" : "bad"}">
         <span class="hc-chip ${chipClass(card.cat).split(" ").slice(1).join(" ")}" style="align-self:flex-start">${chipIcon(card.cat)} ${escapeHtml(card.cat || "")}</span>
@@ -803,7 +836,7 @@ function renderEnd() {
         <span class="lb-rank">${i + 1}</span>
         <span class="lb-medal">${MEDALS[i] || "•"}</span>
         <span class="lb-name">${escapeHtml(p.name)}</span>
-        <span class="lb-score">${countCorrect(p)}/${SCORE_TO_WIN}</span>
+        <span class="lb-score">${countCorrect(p)}/${scoreTarget()}</span>
       </div>
     `;
   }).join("");
@@ -840,6 +873,10 @@ function bindEvents() {
     joinSession(code, name);
   });
   $("#btnStart")?.addEventListener("click", startGame);
+
+  // Score-to-win stepper (host only, read-only for others)
+  $("#stepUp")?.addEventListener("click", () => setScoreToWin(scoreTarget() + 1));
+  $("#stepDown")?.addEventListener("click", () => setScoreToWin(scoreTarget() - 1));
 
   // The end screen "Opnieuw spelen" and lobby "Verlaat lobby" share btnLeave
   $("#btnLeave")?.addEventListener("click", leaveSession);

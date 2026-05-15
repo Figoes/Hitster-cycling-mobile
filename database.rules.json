@@ -10,6 +10,7 @@
         "createdAt":  { ".validate": "newData.isNumber()" },
         "turnIndex":  { ".validate": "newData.isNumber()" },
         "winnerId":   { ".validate": "newData.isString()" },
+        "scoreToWin": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 11" },
         "turnOrder":  { ".validate": "newData.hasChildren()" },
         "drawn":      { "$cardId": { ".validate": "newData.isString()" } },
         "players": {
