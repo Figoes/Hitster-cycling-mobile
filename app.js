@@ -47,6 +47,7 @@ const state = {
   resultTimer: null,
   error: null,
   drawing: false,           // debounce flag for auto-draw
+  homeMode: null,           // 'host' | 'join' — segmented toggle on Home
 };
 
 const $view = document.getElementById("view");
@@ -286,6 +287,28 @@ async function leaveSession() {
   leaveLocal();
 }
 
+async function shareInvite() {
+  if (!state.code) return;
+  const url = `${location.origin}${location.pathname}?code=${state.code}`;
+  const text = `Doe mee aan mijn Hitster Cycling spel! Code: ${state.code}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Hitster Cycling", text, url });
+      return;
+    } catch (e) {
+      if (e?.name === "AbortError") return; // user cancelled
+      // fall through to clipboard
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showError("Link gekopieerd!");
+  } catch (e) {
+    console.error("[share] clipboard write failed:", e);
+    showError("Kopiëren mislukt — kopieer handmatig: " + url);
+  }
+}
+
 async function setScoreToWin(value) {
   if (!state.session || !state.code) return;
   if (state.session.hostId !== state.me.id) return;
@@ -518,6 +541,23 @@ function render() {
 // ── HOME ─────────────────────────────────────────────────────────────────
 function renderHome() {
   const name = escapeHtml(state.me.name);
+  // Default mode: 'join' if URL has ?code=XXXX, else 'host'. User can flip.
+  const codeFromURL = new URLSearchParams(location.search).get("code") || "";
+  if (state.homeMode == null) {
+    state.homeMode = codeFromURL ? "join" : "host";
+  }
+  const mode = state.homeMode;
+
+  const fields = mode === "host"
+    ? `<button class="hc-btn hc-btn--primary" id="btnCreate" style="padding:13px;font-size:13px;width:100%">🚀 Start nieuw spel</button>`
+    : `<div class="form-block">
+         <div class="field-label">Spelcode</div>
+         <input type="text" id="codeInput" placeholder="ABCD" class="code-input"
+                maxlength="${CODE_LENGTH}" autocapitalize="characters"
+                value="${escapeHtml(codeFromURL)}" />
+       </div>
+       <button class="hc-btn hc-btn--outline-cyan" id="btnJoin" style="width:100%">Meedoen met code →</button>`;
+
   return `
     <div class="home">
       <div class="left">
@@ -527,17 +567,15 @@ function renderHome() {
         <div class="sub">Iedereen op een eigen telefoon. Speel in landschapsmodus rondom de tafel.</div>
       </div>
       <div class="hc-card right">
+        <div class="segmented" role="tablist">
+          <button class="${mode === "host" ? "on" : ""}" data-mode="host" role="tab">Nieuw spel</button>
+          <button class="${mode === "join" ? "on" : ""}" data-mode="join" role="tab">Meedoen</button>
+        </div>
         <div class="form-block">
           <div class="field-label">Je naam</div>
           <input type="text" id="nameInput" placeholder="Bijv. Pietje" value="${name}" maxlength="14" />
         </div>
-        <button class="hc-btn hc-btn--primary" id="btnCreate">Nieuw spel starten</button>
-        <div class="or">— OF —</div>
-        <div class="form-block">
-          <div class="field-label">Spelcode</div>
-          <input type="text" id="codeInput" placeholder="ABCD" class="code-input" maxlength="${CODE_LENGTH}" autocapitalize="characters" />
-        </div>
-        <button class="hc-btn hc-btn--outline-cyan" id="btnJoin">Meedoen met code</button>
+        ${fields}
       </div>
     </div>
   `;
@@ -572,7 +610,9 @@ function renderLobby() {
   const startBtn = isHost
     ? `<button class="hc-btn hc-btn--primary" id="btnStart" ${canStart ? "" : "disabled"}>Start spel</button>`
     : "";
-  const leaveBtn = `<button class="hc-btn hc-btn--outline-cyan" id="btnLeave">Verlaat lobby</button>`;
+  const shareBtn = `<button class="hc-btn hc-btn--outline-cyan" id="btnShare">Deel link</button>`;
+  // "Verlaat lobby" is now the × in the topbar — no need to duplicate here.
+  const leaveBtn = "";
   const hint = !canStart && isHost
     ? `<div class="hint">Wacht op minstens ${MIN_PLAYERS} spelers…</div>`
     : !isHost
@@ -599,7 +639,7 @@ function renderLobby() {
           <div class="lbl">Aantal kaarten om te winnen</div>
           ${stepperHtml}
         </div>
-        <div class="actions">${startBtn}${leaveBtn}</div>
+        <div class="actions">${startBtn}${shareBtn}${leaveBtn}</div>
         ${hint}
       </div>
       <div class="hc-card lobby-right">
@@ -874,6 +914,15 @@ function bindEvents() {
     joinSession(code, name);
   });
   $("#btnStart")?.addEventListener("click", startGame);
+  $("#btnShare")?.addEventListener("click", shareInvite);
+
+  // Segmented toggle on Home (Nieuw spel / Meedoen)
+  $view.querySelectorAll(".segmented button[data-mode]").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.homeMode = b.dataset.mode;
+      render();
+    });
+  });
 
   // Score-to-win stepper (host only, read-only for others)
   $("#stepUp")?.addEventListener("click", () => setScoreToWin(scoreTarget() + 1));
