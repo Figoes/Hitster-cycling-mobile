@@ -3,14 +3,29 @@
 // "cat" fields, so app.js never has to know theme-specific detail.
 
 import { MOMENTEN as MOMENTEN_WIELRENNEN } from "./cards.js";
-import { MOMENTEN_AJAX } from "./cards-ajax.js";
 import { MOMENTEN_ALGEMEEN } from "./cards-algemeen.js";
 
-export const THEMES = {
+// cards-ajax.js is generated separately and may not have landed yet — load
+// it dynamically so a missing file doesn't break the whole app; the theme
+// just won't be offered until it exists (see the filter below).
+let MOMENTEN_AJAX = {};
+try {
+  ({ MOMENTEN_AJAX } = await import("./cards-ajax.js"));
+} catch (e) {
+  console.warn("[themes] cards-ajax.js not available yet:", e.message);
+}
+
+const RAW_THEMES = {
   wielrennen: { label: "Wielrennen",       emoji: "🚴", cards: MOMENTEN_WIELRENNEN },
   ajax:       { label: "Ajax 1995–2026",   emoji: "⚽", cards: MOMENTEN_AJAX },
   algemeen:   { label: "Algemene kennis",  emoji: "🧠", cards: MOMENTEN_ALGEMEEN },
 };
+
+// Only offer themes that actually have cards — keeps a not-yet-generated
+// set from appearing as a selectable, unplayable option.
+export const THEMES = Object.fromEntries(
+  Object.entries(RAW_THEMES).filter(([, t]) => Object.keys(t.cards).length > 0)
+);
 
 export const DEFAULT_THEME = "wielrennen";
 
