@@ -3,17 +3,22 @@
 // "cat" fields, so app.js never has to know theme-specific detail.
 
 import { MOMENTEN as MOMENTEN_WIELRENNEN } from "./cards.js";
-import { MOMENTEN_ALGEMEEN } from "./cards-algemeen.js";
 
-// cards-ajax.js is generated separately and may not have landed yet — load
-// it dynamically so a missing file doesn't break the whole app; the theme
-// just won't be offered until it exists (see the filter below).
-let MOMENTEN_AJAX = {};
-try {
-  ({ MOMENTEN_AJAX } = await import("./cards-ajax.js"));
-} catch (e) {
-  console.warn("[themes] cards-ajax.js not available yet:", e.message);
+// cards-ajax.js and cards-algemeen.js are generated separately and may not
+// have landed yet — load them dynamically so a missing file doesn't break
+// the whole app; each theme just won't be offered until its file exists
+// (see the filter below).
+async function loadCards(path, exportName) {
+  try {
+    const mod = await import(path);
+    return mod[exportName] || {};
+  } catch (e) {
+    console.warn(`[themes] ${path} not available yet:`, e.message);
+    return {};
+  }
 }
+const MOMENTEN_AJAX = await loadCards("./cards-ajax.js", "MOMENTEN_AJAX");
+const MOMENTEN_ALGEMEEN = await loadCards("./cards-algemeen.js", "MOMENTEN_ALGEMEEN");
 
 const RAW_THEMES = {
   wielrennen: { label: "Wielrennen",       emoji: "🚴", cards: MOMENTEN_WIELRENNEN },
