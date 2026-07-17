@@ -11,6 +11,7 @@
         "turnIndex":  { ".validate": "newData.isNumber()" },
         "winnerId":   { ".validate": "newData.isString()" },
         "scoreToWin": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 11" },
+        "theme":      { ".validate": "newData.isString() && (newData.val() == 'wielrennen' || newData.val() == 'ajax' || newData.val() == 'algemeen')" },
         "turnOrder":  { ".validate": "newData.hasChildren()" },
         "drawn":      { "$cardId": { ".validate": "newData.isString()" } },
         "players": {

@@ -1,7 +1,9 @@
 # Hitster Cycling v3
 
-Multiplayer wieler-Hitster: 2-6 spelers met elk een telefoon, één gedeeld
-spel. Geen QR-codes meer — alles in-app.
+Multiplayer Hitster: 2-6 spelers met elk een telefoon, één gedeeld spel.
+Geen QR-codes meer — alles in-app. Bij het aanmaken van een spel kiest de
+host een categorie: **Wielrennen**, **Ajax 1995–2026** of **Algemene
+kennis** — elk met een eigen pot van 113 kaarten.
 
 ## Spelregels (kort)
 
@@ -45,11 +47,23 @@ Bestanden:
 |---|---|
 | `index.html` | Shell met topbar en `#view` container |
 | `style.css` | Brand tokens (pink/cyan/dark) + alle UI |
-| `cards.js` | De 113 kaarten als ES module export |
+| `cards.js` | Wielren-kaarten (113) als ES module export |
+| `cards-ajax.js` | Ajax 1995–2026-kaarten (113) |
+| `cards-algemeen.js` | Algemene-kennis-kaarten (113) |
+| `themes.js` | Koppelt de drie kaartenpotten + categorie-chipstijlen |
 | `app.js` | Game logica + Firebase wiring + render |
 | `firebase-config.js` | Jouw Firebase project credentials |
 | `database.rules.json` | RTDB security rules |
 | `logo.png` | Logo (topbar + face-down kaart + iOS home icon) |
+
+## Categorieën toevoegen
+
+Een nieuwe categorie is een los bestand met dezelfde vorm als `cards.js`
+(zelfde velden: `jaar`, `cat`, `renner`, `nat`, `race`, `kort`, `lang`,
+`diff` — de veldnamen zijn generiek, de inhoud hoeft niet over wielrennen
+te gaan). Exporteer het als `MOMENTEN_<NAAM>`, registreer het in
+`themes.js` onder `THEMES` en voeg eventuele nieuwe `cat`-waarden toe aan
+de `CATEGORY_STYLES`-lookup in datzelfde bestand.
 
 ## Firebase setup (eenmalig)
 

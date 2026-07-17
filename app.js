@@ -9,7 +9,7 @@ import {
   getDatabase, ref, set, get, update, onValue, off, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
 
-import { MOMENTEN } from "./cards.js";
+import { THEMES, DEFAULT_THEME, chipStyle } from "./themes.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -25,7 +25,12 @@ const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 6;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
 const CODE_LENGTH = 4;
-const CARD_IDS = Object.keys(MOMENTEN);
+
+// The active session picks which card pool is in play; everything that used
+// to read a module-level MOMENTEN/CARD_IDS now goes through these.
+function currentTheme() { return state.session?.theme || DEFAULT_THEME; }
+function currentCards() { return (THEMES[currentTheme()] || THEMES[DEFAULT_THEME]).cards; }
+function currentCardIds() { return Object.keys(currentCards()); }
 
 // ───────────────────────────────────────────────────────────────────────────
 // Firebase init
@@ -95,19 +100,12 @@ function escapeHtml(s) {
 }
 
 function chipClass(cat) {
-  const k = cat.toLowerCase();
-  if (k.startsWith("memorabel")) return "hc-chip hc-chip--memo";
-  if (k.startsWith("klassiek")) return "hc-chip hc-chip--classic";
-  if (k.startsWith("wereldkampioenschap")) return "hc-chip hc-chip--epic";
-  return "hc-chip"; // grote ronde — neutral
+  const cls = chipStyle(cat).cls;
+  return cls ? `hc-chip ${cls}` : "hc-chip";
 }
 
 function chipIcon(cat) {
-  const k = cat.toLowerCase();
-  if (k.startsWith("memorabel")) return "⚡";
-  if (k.startsWith("klassiek")) return "◆";
-  if (k.startsWith("wereldkampioenschap")) return "🏆";
-  return "🚴";
+  return chipStyle(cat).icon;
 }
 
 function countCorrect(player) {
@@ -159,9 +157,10 @@ async function tryResume(code) {
 // ───────────────────────────────────────────────────────────────────────────
 // Session lifecycle
 // ───────────────────────────────────────────────────────────────────────────
-async function createSession(name) {
+async function createSession(name, theme) {
   if (!name.trim()) { showError("Vul je naam in"); return; }
   if (!state.me.id) { showError("Nog niet ingelogd, probeer opnieuw"); return; }
+  const chosenTheme = THEMES[theme] ? theme : DEFAULT_THEME;
 
   // Try a few codes in case of collision (very unlikely with ~1M space)
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -176,6 +175,7 @@ async function createSession(name) {
       createdAt: now,
       turnIndex: 0,
       scoreToWin: SCORE_DEFAULT,
+      theme: chosenTheme,
       players: {
         [state.me.id]: { name: name.trim(), joinedAt: now, score: 0 }
       }
@@ -365,12 +365,13 @@ async function startGame() {
   if (pids.length < MIN_PLAYERS) { showError(`Minstens ${MIN_PLAYERS} spelers`); return; }
 
   // Shuffle a fresh card pool and slice the first N as anchors
-  const shuffledCards = [...CARD_IDS].sort(() => Math.random() - 0.5);
+  const shuffledCards = [...currentCardIds()].sort(() => Math.random() - 0.5);
   const anchors = {};
   const drawn = {};
+  const cards = currentCards();
   pids.forEach((pid, i) => {
     const cid = shuffledCards[i];
-    const card = MOMENTEN[cid];
+    const card = cards[cid];
     anchors[pid] = { cardId: cid, year: card.jaar, correct: false }; // anchor doesn't count
     drawn[cid] = pid;
   });
@@ -413,6 +414,7 @@ async function drawCard() {
   const me = state.session.players[state.me.id];
   if (me.currentDraw) return; // already have one
 
+  const ids = currentCardIds();
   let assigned = null;
   const res = await runTransaction(sessionRef(state.code), (sess) => {
     if (!sess || sess.status !== "playing") return;
@@ -421,7 +423,7 @@ async function drawCard() {
     if (sess.players[state.me.id].currentDraw) return; // already drawn
     sess.drawn = sess.drawn || {};
     // pick a random undrawn card
-    const undrawn = CARD_IDS.filter((id) => !sess.drawn[id]);
+    const undrawn = ids.filter((id) => !sess.drawn[id]);
     if (undrawn.length === 0) return;
     const pick = undrawn[Math.floor(Math.random() * undrawn.length)];
     sess.drawn[pick] = state.me.id;
@@ -447,7 +449,7 @@ async function placeCard(slotIndex) {
   if (!myTurn) return;
 
   const cardId = me.currentDraw;
-  const card = MOMENTEN[cardId];
+  const card = currentCards()[cardId];
   const sortedTl = sortTimeline(me.timeline);
   const correct = isPlacementCorrect(sortedTl, card.jaar, slotIndex);
 
@@ -503,8 +505,12 @@ async function placeCard(slotIndex) {
 // ───────────────────────────────────────────────────────────────────────────
 function render() {
   // Update meta line in topbar
-  if (state.code) $meta.textContent = `Code ${state.code}`;
-  else $meta.textContent = "";
+  if (state.code) {
+    const themeLabel = THEMES[currentTheme()]?.label;
+    $meta.textContent = themeLabel ? `Code ${state.code} · ${themeLabel}` : `Code ${state.code}`;
+  } else {
+    $meta.textContent = "";
+  }
 
   // Show topbar close button only when in a session
   const $topClose = document.getElementById("btnTopClose");
@@ -547,9 +553,25 @@ function renderHome() {
     state.homeMode = codeFromURL ? "join" : "host";
   }
   const mode = state.homeMode;
+  if (state.homeTheme == null || !THEMES[state.homeTheme]) {
+    state.homeTheme = DEFAULT_THEME;
+  }
+
+  const themePicker = `
+    <div class="form-block">
+      <div class="field-label">Categorie</div>
+      <div class="theme-picker" role="tablist">
+        ${Object.entries(THEMES).map(([key, t]) => `
+          <button class="${state.homeTheme === key ? "on" : ""}" data-theme="${key}" role="tab">
+            <span class="emoji">${t.emoji}</span><span>${escapeHtml(t.label)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
 
   const fields = mode === "host"
-    ? `<button class="hc-btn hc-btn--primary" id="btnCreate" style="padding:13px;font-size:13px;width:100%">🚀 Start nieuw spel</button>`
+    ? `${themePicker}<button class="hc-btn hc-btn--primary" id="btnCreate" style="padding:13px;font-size:13px;width:100%">🚀 Start nieuw spel</button>`
     : `<div class="form-block">
          <div class="field-label">Spelcode</div>
          <input type="text" id="codeInput" placeholder="ABCD" class="code-input"
@@ -635,6 +657,7 @@ function renderLobby() {
         <div class="waiting">Wachten op spelers · ${pids.length}/${MAX_PLAYERS}</div>
         <div class="kamercode">Kamercode</div>
         <div class="roomcode">${escapeHtml(state.code || "")}</div>
+        <div class="theme-badge">${THEMES[sess.theme]?.emoji || ""} ${escapeHtml(THEMES[sess.theme]?.label || THEMES[DEFAULT_THEME].label)}</div>
         <div class="score-config">
           <div class="lbl">Aantal kaarten om te winnen</div>
           ${stepperHtml}
@@ -653,6 +676,7 @@ function renderLobby() {
 // ── GAME (turn states) ───────────────────────────────────────────────────
 function renderGame() {
   const sess = state.session;
+  const cards = currentCards();
   const order = sess.turnOrder || [];
   const activeId = order[sess.turnIndex];
   const myTurn = activeId === state.me.id;
@@ -702,7 +726,7 @@ function renderGame() {
   if (state.localResult) {
     // ── RevealYear ──
     const r = state.localResult;
-    const card = MOMENTEN[r.cardId] || {};
+    const card = cards[r.cardId] || {};
     const sideLabel = `${escapeHtml(me.name || "")} · ${countCorrect(me)} / ${scoreTarget()} kaarten`;
     leftHtml = `
       <div class="hc-card ${r.correct ? "hc-card--yellow" : "hc-card--pink"} reveal-card ${r.correct ? "" : "bad"}">
@@ -726,7 +750,7 @@ function renderGame() {
     `;
   } else if (myTurn && hasDraw && state.cardOpen) {
     // ── CardDetail (hero card on left, timeline preview on right) ──
-    const card = MOMENTEN[me.currentDraw];
+    const card = cards[me.currentDraw];
     leftHtml = `
       <div class="hc-card hc-card--pink hero-card">
         <div class="row-top">
@@ -827,6 +851,7 @@ function renderDiffDots(diff) {
 //   "active"      — slots between every pair, all tappable
 //   "preview-active" — slots tappable but rendered dim (player is reading the card)
 function renderTimelineStrip(sorted, mode, _activeIdx, highlightCardId = null) {
+  const cards = currentCards();
   const showSlots = mode !== "filled";
   const dim = mode === "preview-active";
   const parts = [];
@@ -836,7 +861,7 @@ function renderTimelineStrip(sorted, mode, _activeIdx, highlightCardId = null) {
     }
     if (i < sorted.length) {
       const entry = sorted[i];
-      const card = MOMENTEN[entry.cardId];
+      const card = cards[entry.cardId];
       if (!card) continue;
       const isAnchor = !entry.correct;
       const isHighlight = highlightCardId && entry.cardId === highlightCardId;
@@ -906,7 +931,7 @@ function bindEvents() {
 
   $("#btnCreate")?.addEventListener("click", () => {
     const name = $("#nameInput")?.value || "";
-    createSession(name);
+    createSession(name, state.homeTheme);
   });
   $("#btnJoin")?.addEventListener("click", () => {
     const name = $("#nameInput")?.value || "";
@@ -920,6 +945,14 @@ function bindEvents() {
   $view.querySelectorAll(".segmented button[data-mode]").forEach((b) => {
     b.addEventListener("click", () => {
       state.homeMode = b.dataset.mode;
+      render();
+    });
+  });
+
+  // Theme picker on Home (host flow only)
+  $view.querySelectorAll(".theme-picker button[data-theme]").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.homeTheme = b.dataset.theme;
       render();
     });
   });
